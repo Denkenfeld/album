@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Pix Fotostudio Selection – Passwortgeschützte Fotoauswahl für Kunden">
+    <title>Pix Fotostudio Selection</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;display=swap');
+        
+        :root {
+            --tw-color-primary: #14b8a6;
+        }
+        
+        * {
+            transition-property: color, background-color, border-color, text-decoration-color, fill, stroke;
+            transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+            transition-duration: 150ms;
+        }
+        
+        .gallery-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 1.5rem;
+        }
+        
+        @media (max-width: 640px) {
+            .gallery-grid {
+                grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+            }
+        }
+        
+        .photo-card {
+            overflow: hidden;
+            border-radius: 12px;
+            box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1);
+        }
+        
+        .photo-card img {
+            transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        .photo-card:hover img {
+            transform: scale(1.08);
+        }
+        
+        .modal {
+            animation: modalPop 0.3s ease forwards;
+        }
+        
+        @keyframes modalPop {
+            0% { opacity: 0; transform: scale(0.95); }
+            100% { opacity: 1; transform: scale(1); }
+        }
+        
+        .no-download {
+            user-select: none;
+            -webkit-user-drag: none;
+        }
+    </style>
+</head>
+<body class="bg-zinc-950 text-white font-sans">
+    <!-- PASSWORD SCREEN -->
+    <div id="password-screen" class="min-h-screen flex items-center justify-center bg-zinc-950">
+        <div class="max-w-md w-full mx-4 bg-zinc-900 rounded-3xl shadow-2xl p-10 text-center">
+            <div class="mx-auto w-20 h-20 bg-teal-500 rounded-2xl flex items-center justify-center mb-8">
+                📸
+            </div>
+            <h1 class="text-4xl font-semibold tracking-tight mb-2">Pix Fotostudio</h1>
+            <p class="text-zinc-400 mb-10">Selection</p>
+            
+            <h2 class="text-2xl font-medium mb-6">Kunden-Galerie</h2>
+            <p class="text-zinc-400 mb-8">Gib das Passwort ein, um deine Fotos zu sehen</p>
+            
+            <input 
+                id="password-input"
+                type="password"
+                placeholder="Passwort eingeben"
+                class="w-full bg-zinc-800 border border-zinc-700 focus:border-teal-500 rounded-2xl px-6 py-5 text-lg outline-none text-center mb-6">
+            
+            <button 
+                onclick="checkPassword()"
+                class="w-full bg-teal-500 hover:bg-teal-600 text-white font-medium text-xl py-5 rounded-2xl flex items-center justify-center gap-3">
+                Galerie betreten
+                <span class="text-2xl">→</span>
+            </button>
+            
+            <p id="password-error" class="text-red-400 mt-6 hidden">Falsches Passwort. Bitte versuche es erneut.</p>
+        </div>
+    </div>
+
+    <!-- MAIN GALLERY (hidden initially) -->
+    <div id="main-content" class="hidden min-h-screen">
+        
+        <!-- HEADER -->
+        <header class="sticky top-0 bg-zinc-900 border-b border-zinc-800 z-50">
+            <div class="max-w-7xl mx-auto px-6 py-5 flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                    <div class="w-9 h-9 bg-teal-500 rounded-2xl flex items-center justify-center text-xl">📸</div>
+                    <div>
+                        <h1 class="text-2xl font-semibold tracking-tight">Pix Fotostudio Selection</h1>
+                        <p class="text-xs text-teal-400 -mt-1">Deine persönliche Auswahl</p>
+                    </div>
+                </div>
+                
+                <div class="flex items-center gap-6">
+                    <button onclick="logout()" 
+                            class="flex items-center gap-2 text-zinc-400 hover:text-white px-4 py-2 rounded-2xl hover:bg-zinc-800">
+                        <span>Abmelden</span>
+                        <span class="text-xl">↩</span>
+                    </button>
+                    
+                    <!-- Cart Button -->
+                    <button onclick="showCart()" 
+                            class="relative flex items-center gap-2 bg-zinc-800 hover:bg-zinc-700 px-6 py-3 rounded-3xl">
+                        <span class="text-2xl">🛒</span>
+                        <span class="font-medium">Warenkorb</span>
+                        <span id="cart-count" 
+                              class="absolute -top-1 -right-1 bg-teal-500 text-white text-xs font-bold w-5 h-5 rounded-2xl flex items-center justify-center">0</span>
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <div class="max-w-7xl mx-auto px-6 py-10">
+            <div class="flex justify-between items-baseline mb-8">
+                <div>
+                    <h2 id="gallery-title" class="text-4xl font-semibold">Deine Fotos</h2>
+                    <p class="text-zinc-400">Wähle deine Favoriten aus</p>
+                </div>
+                <div id="loading-indicator" class="hidden flex items-center gap-3 text-teal-400">
+                    <div class="w-4 h-4 border-2 border-teal-400 border-t-transparent rounded-full animate-spin"></div>
+                    <span class="text-sm">Bilder werden geladen...</span>
+                </div>
+            </div>
+
+            <!-- GALLERY GRID -->
+            <div id="gallery-grid" class="gallery-grid">
+                <!-- Wird per JS gefüllt -->
+            </div>
+        </div>
+    </div>
+
+    <!-- LIGHTBOX MODAL -->
+    <div id="lightbox" onclick="if(event.target===this)hideLightbox()" 
+         class="hidden fixed inset-0 bg-black/90 z-[9999] flex items-center justify-center p-4">
+        <div class="max-w-5xl w-full bg-zinc-900 rounded-3xl overflow-hidden modal">
+            <div class="flex justify-end p-4">
+                <button onclick="hideLightbox()" class="text-4xl leading-none text-zinc-400 hover:text-white">×</button>
+            </div>
+            <div class="px-8 pb-8">
+                <img id="lightbox-img" class="w-full max-h-[70vh] object-contain mx-auto rounded-2xl no-download" alt="Vorschau">
+            </div>
+            <div class="px-8 pb-8 flex justify-between items-center">
+                <p id="lightbox-filename" class="text-zinc-400 font-medium"></p>
+                <button onclick="toggleSelectFromLightbox()" 
+                        id="lightbox-select-btn"
+                        class="flex items-center gap-3 bg-teal-500 hover:bg-teal-600 text-white px-8 py-4 rounded-3xl font-medium text-lg">
+                    <span id="lightbox-select-text">In Warenkorb legen</span>
+                    <span class="text-2xl">🛒</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- CART MODAL -->
+    <div id="cart-modal" onclick="if(event.target===this)hideCart()" 
+         class="hidden fixed inset-0 bg-black/80 z-[10000] flex items-end md:items-center justify-center p-4">
+        <div onclick="event.stopImmediatePropagation()" 
+             class="bg-zinc-900 rounded-3xl w-full max-w-2xl max-h-[90vh] flex flex-col">
+            
+            <div class="px-8 py-6 border-b border-zinc-800 flex justify-between items-center">
+                <h3 class="text-3xl font-medium">Dein Warenkorb</h3>
+                <button onclick="hideCart()" class="text-4xl leading-none text-zinc-400">×</button>
+            </div>
+            
+            <div id="cart-items" class="flex-1 overflow-auto p-8 space-y-6">
+                <!-- Wird per JS gefüllt -->
+            </div>
+            
+            <div class="p-8 border-t border-zinc-800">
+                <button onclick="sendSelection()" 
+                        class="w-full bg-teal-500 hover:bg-teal-600 py-6 rounded-3xl text-2xl font-medium flex items-center justify-center gap-4">
+                    <span>Auswahl per E-Mail senden</span>
+                    <span class="text-3xl">✉️</span>
+                </button>
+                <p class="text-center text-xs text-zinc-500 mt-4">Es wird eine E-Mail an fotostudiopix@gmail.com geöffnet</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ====================== KONFIGURATION ======================
+        const PASSWORD = "ma2026"
+        const EMAIL_TO = "fotostudiopix@gmail.com"
+        
+        // === DEIN GITHUB ACCOUNT HIER EINTRAGEN ===
+        const GITHUB_USERNAME = "DEIN_GITHUB_USERNAME"          // ← HIER ÄNDERN
+        const REPO_NAME = "DEIN_REPO_NAME"                      // ← HIER ÄNDERN (z. B. "pix-selection")
+        // ====================================================
+
+        let allImages = []
+        let selectedImages = new Set()   // Speichert Dateinamen
+
+        // Tailwind aktivieren
+        function initTailwind() {
+            tailwind.config = {
+                content: [],
+                theme: { extend: {} }
+            }
+        }
+
+        // Passwort prüfen
+        function checkPassword() {
+            const input = document.getElementById("password-input").value.trim()
+            const errorEl = document.getElementById("password-error")
+            
+            if (input === PASSWORD) {
+                document.getElementById("password-screen").classList.add("hidden")
+                document.getElementById("main-content").classList.remove("hidden")
+                loadImages()
+            } else {
+                errorEl.classList.remove("hidden")
+                setTimeout(() => errorEl.classList.add("hidden"), 3000)
+                document.getElementById("password-input").value = ""
+            }
+        }
+
+        // Bilder über GitHub API automatisch laden
+        async function loadImages() {
+            const loading = document.getElementById("loading-indicator")
+            const grid = document.getElementById("gallery-grid")
+            grid.innerHTML = ""
+            loading.classList.remove("hidden")
+            
+            try {
+                const url = `https://api.github.com/repos/${GITHUB_USERNAME}/${REPO_NAME}/contents/img`
+                const response = await fetch(url)
+                
+                if (!response.ok) throw new Error("Keine Bilder gefunden")
+                
+                const files = await response.json()
+                
+                // Nur Bild-Dateien filtern
+                allImages = files
+                    .filter(file => 
+                        file.type === "file" && 
+                        /\.(jpe?g|png|webp)$/i.test(file.name)
+                    )
+                    .map(file => ({
+                        name: file.name,
+                        url: `./img/${file.name}`
+                    }))
+                
+                if (allImages.length === 0) {
+                    grid.innerHTML = `
+                        <div class="col-span-full text-center py-20 text-zinc-400">
+                            <p class="text-2xl mb-3">😕</p>
+                            <p>Keine Bilder im Ordner <strong>/img</strong> gefunden.</p>
+                            <p class="text-sm mt-2">Lade deine Fotos hoch und lade die Seite neu.</p>
+                        </div>`
+                    return
+                }
+                
+                renderGallery()
+                
+            } catch (err) {
+                console.error(err)
+                grid.innerHTML = `
+                    <div class="col-span-full text-center py-20 text-zinc-400">
+                        <p class="text-2xl mb-3">⚠️</p>
+                        <p>Fehler beim Laden der Bilder.</p>
+                        <p class="text-sm mt-2">Stelle sicher, dass der Repo-Name und Username korrekt sind und der Ordner <strong>/img</strong> existiert.</p>
+                    </div>`
+            } finally {
+                loading.classList.add("hidden")
+            }
+        }
+
+        function renderGallery() {
+            const grid = document.getElementById("gallery-grid")
+            grid.innerHTML = ""
+            
+            allImages.forEach(img => {
+                const isSelected = selectedImages.has(img.name)
+                
+                const cardHTML = `
+                <div onclick="openLightbox('${img.name}', '${img.url}')" 
+                     class="photo-card bg-zinc-900 cursor-pointer group">
+                    <div class="relative">
+                        <img src="${img.url}" 
+                             class="w-full aspect-[4/3] object-cover no-download"
+                             loading="lazy"
+                             alt="${img.name}">
+                        
+                        <!-- Selection Overlay -->
+                        <div onclick="event.stopImmediatePropagation(); toggleSelection('${img.name}', '${img.url}');" 
+                             class="absolute top-4 right-4 w-8 h-8 bg-white/90 hover:bg-white rounded-2xl flex items-center justify-center shadow-md text-2xl
+                                    ${isSelected ? 'bg-teal-500 text-white' : 'text-zinc-400'}">
+                            ${isSelected ? '✓' : '+'}
+                        </div>
+                        
+                        <div class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent h-16"></div>
+                        <p class="absolute bottom-4 left-4 text-xs font-medium text-white/80 truncate max-w-[200px]">
+                            ${img.name}
+                        </p>
+                    </div>
+                </div>`
+                
+                grid.innerHTML += cardHTML
+            })
+        }
+
+        function openLightbox(name, url) {
+            const lightbox = document.getElementById("lightbox")
+            const imgEl = document.getElementById("lightbox-img")
+            const filenameEl = document.getElementById("lightbox-filename")
+            const btn = document.getElementById("lightbox-select-btn")
+            
+            imgEl.src = url
+            filenameEl.textContent = name
+            
+            // Button-Text anpassen
+            const isSelected = selectedImages.has(name)
+            document.getElementById("lightbox-select-text").textContent = 
+                isSelected ? "Aus Warenkorb entfernen" : "In Warenkorb legen"
+            
+            window.currentLightboxImage = {name, url}
+            
+            lightbox.classList.remove("hidden")
+            lightbox.classList.add("flex")
+        }
+
+        function hideLightbox() {
+            const lightbox = document.getElementById("lightbox")
+            lightbox.classList.add("hidden")
+            lightbox.classList.remove("flex")
+        }
+
+        function toggleSelectFromLightbox() {
+            const img = window.currentLightboxImage
+            if (!img) return
+            toggleSelection(img.name, img.url)
+            hideLightbox()
+        }
+
+        function toggleSelection(name, url) {
+            if (selectedImages.has(name)) {
+                selectedImages.delete(name)
+            } else {
+                selectedImages.add(name)
+            }
+            renderGallery()
+            updateCartCount()
+        }
+
+        function updateCartCount() {
+            document.getElementById("cart-count").textContent = selectedImages.size
+        }
+
+        function showCart() {
+            if (selectedImages.size === 0) {
+                alert("Dein Warenkorb ist leer. Wähle zuerst Bilder aus.")
+                return
+            }
+            
+            const container = document.getElementById("cart-items")
+            container.innerHTML = ""
+            
+            Array.from(selectedImages).forEach(name => {
+                const imgData = allImages.find(i => i.name === name)
+                if (!imgData) return
+                
+                const itemHTML = `
+                <div class="flex gap-4 items-center">
+                    <img src="${imgData.url}" class="w-20 h-20 object-cover rounded-2xl no-download">
+                    <div class="flex-1">
+                        <p class="font-medium">${name}</p>
+                    </div>
+                    <button onclick="removeFromCart('${name}'); event.stopImmediatePropagation()" 
+                            class="text-4xl text-red-400 hover:text-red-500 px-3">×</button>
+                </div>`
+                container.innerHTML += itemHTML
+            })
+            
+            document.getElementById("cart-modal").classList.remove("hidden")
+            document.getElementById("cart-modal").classList.add("flex")
+        }
+
+        function hideCart() {
+            const modal = document.getElementById("cart-modal")
+            modal.classList.add("hidden")
+            modal.classList.remove("flex")
+        }
+
+        function removeFromCart(name) {
+            selectedImages.delete(name)
+            updateCartCount()
+            showCart() // refresh
+            renderGallery()
+        }
+
+        // E-Mail mit Auswahl versenden (mailto)
+        function sendSelection() {
+            hideCart()
+            
+            let body = `Hallo Pix Fotostudio,\n\n`
+            body += `Ich habe folgende Bilder ausgewählt:\n\n`
+            
+            Array.from(selectedImages).forEach(name => {
+                body += `• ${name}\n`
+            })
+            
+            body += `\nVielen Dank!\n`
+            body += `Mit freundlichen Grüßen\n`
+            
+            const subject = encodeURIComponent("Fotoauswahl – Pix Fotostudio Selection")
+            const mailtoLink = `mailto:${EMAIL_TO}?subject=${subject}&body=${encodeURIComponent(body)}`
+            
+            window.location.href = mailtoLink
+        }
+
+        function logout() {
+            if (confirm("Möchtest du dich wirklich abmelden?")) {
+                selectedImages.clear()
+                document.getElementById("main-content").classList.add("hidden")
+                document.getElementById("password-screen").classList.remove("hidden")
+                document.getElementById("password-input").value = ""
+            }
+        }
+
+        // Rechtsklick & Download komplett deaktivieren
+        function disableDownload() {
+            document.addEventListener("contextmenu", e => {
+                if (e.target.tagName === "IMG") {
+                    e.preventDefault()
+                    return false
+                }
+            })
+            
+            document.addEventListener("dragstart", e => {
+                if (e.target.tagName === "IMG") e.preventDefault()
+            })
+        }
+
+        // Start
+        window.onload = function() {
+            initTailwind()
+            disableDownload()
+            // Passwort-Screen ist standardmäßig sichtbar
+        }
+    </script>
+</body>
+</html>
